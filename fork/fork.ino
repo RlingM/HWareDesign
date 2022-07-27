@@ -17,13 +17,13 @@ const char Start = 'k';
 //#define SPEED_LEVEL_MIN 100   //遥控模式下电机最小速度，待改！！！
 
 //电机接口定义
-const int left_ENA = 9;
-const int right_ENB = 10;
+const int left_ENAandB = 6;
+const int right_ENAandB = 10;
 
-const int left_IN1_3 = 13;
-const int left_IN2_4 = 8;
-const int right_IN1_3 = 13;
-const int right_IN2_4 = 8;
+const int left_IN1_3 = 9;
+const int left_IN2_4 = 4;
+const int right_IN1_3 = 9;
+const int right_IN2_4 = 4;
 
 const int left_ENC_A = 2;
 const int right_ENC_A = 3;
@@ -118,7 +118,7 @@ void left_ISR(){
   left_rpm = left_count * 15.0 / 13.0;
   left_count = 0;
   left_Pwm = PID(left_goal, left_rpm);
-  analogWrite(left_ENA, left_Pwm);
+  analogWrite(left_ENAandB, left_Pwm);
 }
 
 //右侧轮中断更新速度
@@ -126,7 +126,7 @@ void right_ISR(){
   right_rpm = right_count * 15.0 / 13.0;
   right_count = 0;
   right_Pwm = PID(right_goal, right_rpm);
-  analogWrite(right_ENB, right_Pwm);
+  analogWrite(right_ENAandB, right_Pwm);
 }
 
 //外部中断

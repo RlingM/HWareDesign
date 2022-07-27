@@ -46,21 +46,6 @@ float right_UlDisMea(){
   return pulseIn(right_EcoPin, HIGH) / 58.00;
 }
 
-/*//判断是否同速
-bool TheSameSpeed(){
-  return (abs(left_rpm) < abs(right_rpm) + 5.0);
-}
-
-//判断是否右侧轮转速更高
-bool RHigher(){
-  return (abs(right_rpm) - abs(left_rpm) > 20.0);
-}
-
-//判断是否左侧轮转速更高
-bool LHigher(){
-  return (abs(left_rpm) - abs(right_rpm) > 20.0);
-}*/
-
 void setup() {
   // put your setup code here, to run once:
   info[2] = '\0';
