@@ -6,6 +6,7 @@
 
 #include <MsTimer2.h>
 #include "HardwareSerial.h"
+
 const char Forward = 'f';
 const char Backward = 'b';
 const char Turn_left = 'l' ;
@@ -29,7 +30,7 @@ const int right_ENC_A = 3;
 
 RF24 radio(7,8);
 const byte address[6] = "00001";
-int order[2];
+float order[3];
 
 //PID
 int left_count = 0;
@@ -46,6 +47,17 @@ float left_goal = 100;//待调
 float right_goal = 100;//待调
 
 bool mode = 0;//模式选择 'm=1',遥控模式  'm=0',自动模式
+
+//Control
+float a = 1;
+float b = 1;
+float c = 1;
+float d = 1;
+float e = 1;
+float pre_deltaV;
+float deltaV;
+float pre_right_dist;
+float right_dist;
 //---------------------------------------------------------
 
 //PID算法
@@ -55,6 +67,40 @@ float PID(float goalRpm, float nowRpm){
   sumErr += err;
   float PWM = Ki * sumErr + Kp * err + Kd * derr;
   return PWM;
+}
+
+//减速
+void Deceleration(float dist){
+  float x[3];
+  x[2] = '\0';
+  while(x[0] > 0.1){
+    radio.read(&x, sizeof(x));
+  }
+  if(x[0] < 0.1){
+    while(x[1] < 5){
+      if((right_goal - 20 <= 0) && (left_goal - 20 <= 0)){
+        left_goal = 0;
+        right_goal = 0;
+        delay(500);
+      }
+      else if((right_goal >= 0) && (left_goal >= 0)){
+        left_goal -= 20;
+        right_goal -= 20;
+        delay(500);
+      }
+    }
+  }
+}
+
+//直线控制
+float Control(float dist){
+  float temp;
+  temp = deltaV;
+  deltaV = a * dist + b * right_dist + c * pre_right_dist - d * deltaV - e * pre_deltaV;
+  pre_right_dist = right_dist;
+  right_dist = dist;
+  pre_deltaV = temp;
+  return deltaV;
 }
 
 //左侧轮中断计数
@@ -110,9 +156,17 @@ void Proceed(){
   right_Pwm = -right_Pwm;
 }
 
-void motorChange(int x)
+void motorChange(float x[])
 {
+  switch((int)x[0]){
+    case 0:
+      Deceleration(x[1]);
+    case 1:
+      float temp = Control(x[1]);
+      left_goal += temp / 2;
+      right_goal -= temp / 2;
   }
+}
 
 void RemoteControlMode(char Cmd)//遥控模式
 {
@@ -289,9 +343,6 @@ void motorStop()
   digitalWrite(right_IN2_4, LOW);
 }
 
-
-
-
 //判断是否同速
 bool TheSameSpeed(){
   return (abs(left_rpm) < abs(right_rpm) + 5.0);
@@ -329,7 +380,7 @@ void setup(){
   //Serial.println("all ready");
   //Serial.println("Please chose mode.");
   //Serial.println("The default mode is Remote Control mode.");
-    SPI.begin();
+  SPI.begin();
   Serial.begin(115200);
   radio.begin();
   radio.setChannel(90);
@@ -339,18 +390,13 @@ void setup(){
   radio.startListening();
 }
 
-
-
 void loop() {
   // put your main code here, to run repeatedly:
   if(radio.available()){
     radio.read(&order, sizeof(order));
-    Serial.println(*order);
-    if(order[0]==1||order[0]==2||order[0]==3||order[0]==4||order[0]==5)
-      motorChange(order[0]);
+    motorChange(order);
   }
-      while(Serial.available()>0)
-  {
+  while(Serial.available()>0){
     char Cmd = Serial.read();
     delay(1);
     if(mode==1)

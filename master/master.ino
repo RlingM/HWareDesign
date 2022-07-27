@@ -4,19 +4,17 @@
 #include <RF24_config.h>
 #include <SPI.h>
 
+//超声接口定义
 const int front_TrgPin = 10;
 const int front_EcoPin = 4;
 const int left_TrgPin = 6;
 const int left_EcoPin = 2;
 const int right_TrgPin = 5;
 const int right_EcoPin = 3;
-float front_dist[2];
-float left_dist[2];
-float right_dist[2];
 
 RF24 radio(7, 8);
 const byte address[6] = "00001";
-int info[2];
+float info[3];
 
 //前超声测距
 float front_UlDisMea(){
@@ -48,7 +46,7 @@ float right_UlDisMea(){
   return pulseIn(right_EcoPin, HIGH) / 58.00;
 }
 
-//判断是否同速
+/*//判断是否同速
 bool TheSameSpeed(){
   return (abs(left_rpm) < abs(right_rpm) + 5.0);
 }
@@ -61,14 +59,11 @@ bool RHigher(){
 //判断是否左侧轮转速更高
 bool LHigher(){
   return (abs(left_rpm) - abs(right_rpm) > 20.0);
-}
+}*/
 
 void setup() {
   // put your setup code here, to run once:
-  info[1] = '\0';
-  front_dist[1] = '\0';
-  left_dist[1] = '\0';
-  right_dist[1] = '\0';
+  info[2] = '\0';
   SPI.begin();
   Serial.begin(115200);
   radio.begin();
@@ -88,50 +83,21 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   
-  front_dist[0] = front_UlDisMea();
-  left_dist[0] = left_UlDisMea();
-  right_dist[0] = right_UlDisMea();
-
-  //判断正在直行且前方有车或障碍物
-  if(front_dist[0] <= 10){
-    if(TheSameSpeed()){
-      info[0] = 1;
-      radio.write(&info, sizeof(info));
+  //判断小车前方有车或障碍物
+  if(front_UlDisMea() <= 10){
+    info[0] = 0;
+    info[1] = front_UlDisMea();
+    radio.write(&info, sizeof(info));
       
-    }
   }
-
-  //判断正在直行但角度有些不对，应右转少许
-  if((left_dist[0] <= 10) && TheSameSpeed()){
-    info[0] = 4;
-    radio.write(&info, sizeof(info));
-    
-  }
-  //判断正在直行但角度有些不对，应左转少许
-  if((right_dist[0] <= 10) && TheSameSpeed()){
-    info[0] = 5;
-    radio.write(&info, sizeof(info));
-  }
-
-
-  //判断正在左转但是转弯幅度不对
-  if((left_dist[0] <= 10) && RHigher()){
-    info[0] = 2;
-    radio.write(&info, sizeof(info));
-    
-  }
-
-  //判断正在右转但是转弯幅度不对
-  if((right_dist[0] <= 10) && LHigher()){
-    info[0] = 3;
+  
+  //判断小车偏离中心，这里隐含规定了中心值为15
+  else if((right_UlDisMea() < 16) || (right_UlDisMea() > 14)){
+    info[0] = 1;
+    info[1] = right_UlDisMea() - 15;
     radio.write(&info, sizeof(info)); 
     
   }
 
-  //判断可以恢复原车速
-  if(front_dist[0] <= 10){
-    info[0] = 6;
-    radio.write(&info, sizeof(info)); 
-  }
   delay(20);
 }
