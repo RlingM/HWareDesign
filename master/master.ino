@@ -46,6 +46,10 @@ float right_UlDisMea(){
   return pulseIn(right_EcoPin, HIGH) / 58.00;
 }
 
+void ISR(){
+  
+}
+
 void setup() {
   // put your setup code here, to run once:
   info[2] = '\0';
@@ -54,8 +58,8 @@ void setup() {
   radio.begin();
   radio.setChannel(90);
   radio.openWritingPipe(address);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_MIN);
+  radio.setDataRate(RF24_2MBPS);
+  radio.setPALevel(RF24_PA_LOW);
   radio.stopListening();
   pinMode(front_TrgPin, OUTPUT);
   pinMode(front_EcoPin, INPUT);
@@ -77,7 +81,7 @@ void loop() {
   }
   
   //判断小车偏离中心，这里隐含规定了中心值为15
-  else if((right_UlDisMea() < 16) || (right_UlDisMea() > 14)){
+  else if((right_UlDisMea() < 14) || (right_UlDisMea() > 16)){
     info[0] = 1;
     info[1] = right_UlDisMea() - 15;
     radio.write(&info, sizeof(info)); 
