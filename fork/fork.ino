@@ -52,7 +52,7 @@ bool mode = 0;
 
 //Control
 float CA = -4.8 * pow(10, -4);
-float Ca;
+float Ca = -4.9 * pow(10,-5);
 float Cb = CA * Ca * Ca / 4;
 float deltaV;
 float pre_dist;
