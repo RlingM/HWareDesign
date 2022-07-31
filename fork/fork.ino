@@ -44,13 +44,14 @@ int right_Pwm;
 float left_rpm;
 float right_rpm;
 
-float left_goal = 45;//待调
-float right_goal = 100;//待调
+float left_goal = 80;
+float right_goal = 80;
 
-bool mode = 0;//模式选择 'm = 1',遥控模式  'm = 0',自动模式
+//模式选择 'm = 1',遥控模式  'm = 0',自动模式
+bool mode = 0;
 
 //Control
-float CA;
+float CA = -4.8 * pow(10, -4);
 float Ca;
 float Cb = CA * Ca * Ca / 4;
 float deltaV;
@@ -252,8 +253,8 @@ void RemoteControlMode(char Cmd)//遥控模式
 }
 
 void AutoMode(char Cmd){
-  right_goal = 100;
-  left_goal = 100;//初始速度待改！！！
+  right_goal = 80;
+  left_goal = 80;
   switch(Cmd)
   {
     case 'm':
@@ -320,8 +321,8 @@ void motorRun(char Cmd, uint8_t left_goal, uint8_t right_goal){
       break;
 
     case Turn_left:
-      left_goal = -80;
-      right_goal = 80;//待调
+      left_goal = -60;
+      right_goal = 60;
       Proceed();
       delay(100);//待调
       motorStop();
@@ -329,8 +330,8 @@ void motorRun(char Cmd, uint8_t left_goal, uint8_t right_goal){
     
     
     case Turn_right:
-      left_goal = 80;
-      right_goal = -80;//待调
+      left_goal = 60;
+      right_goal = -60;//待调
       Proceed();
       delay(100);//待调
       motorStop();
