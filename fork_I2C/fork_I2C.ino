@@ -1,11 +1,5 @@
-#include <nRF24L01.h>
-#include <printf.h>
-#include <RF24.h>
-#include <RF24_config.h>
-#include <SPI.h>
-
+#include <Wire.h>
 #include <TimerOne.h>
-#include "HardwareSerial.h"
 
 //遥控
 const char Forward = 'f';
@@ -30,8 +24,6 @@ const int left_ENC_A = 2;
 const int right_ENC_A = 3;
 
 //通信
-RF24 radio(7,8);
-const byte address[6] = "10011";
 float order[3];
 
 //PID
@@ -403,20 +395,15 @@ void setup(){
   //Serial.println("All ready");
   //Serial.println("Please choose mode.");
   //Serial.println("The default mode is Remote Control mode.");
-  SPI.begin();
-  Serial.begin(115200);
-  radio.begin();
-  radio.setChannel(90);
-  radio.setDataRate(RF24_2MBPS);
-  radio.openReadingPipe(0, address);
-  radio.setPALevel(RF24_PA_MAX); 
-  radio.startListening();
+  Serial.begin(9600);
+  Wire.begin(44);
+  Wire.onReceive(receiveEvent);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if(radio.available()){
-    radio.read(&order, sizeof(order));
+  if(Wire.available()){
+    Wire.read(order, sizeof(order));
     motorChange(order);
   }
   /*while(Serial.available() > 0){

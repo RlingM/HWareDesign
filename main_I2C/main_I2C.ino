@@ -1,8 +1,4 @@
-#include <nRF24L01.h>
-#include <printf.h>
-#include <RF24.h>
-#include <RF24_config.h>
-#include <SPI.h>
+#include <Wire.h>
 
 //超声接口定义
 const int front_TrgPin = 10;
@@ -12,8 +8,7 @@ const int left_EcoPin = 2;
 const int right_TrgPin = 5;
 const int right_EcoPin = 3;
 
-RF24 radio(7, 8);
-const byte address[6] = "10011";
+//通信
 float info[3];
 
 //前超声测距
@@ -48,15 +43,9 @@ float right_UlDisMea(){
 
 void setup() {
   // put your setup code here, to run once:
+  Serial.begin(9600);
+  Wire.begin();
   info[2] = '\0';
-  SPI.begin();
-  Serial.begin(115200);
-  radio.begin();
-  radio.setChannel(90);
-  radio.openWritingPipe(address);
-  radio.setDataRate(RF24_2MBPS);
-  radio.setPALevel(RF24_PA_MAX);
-  radio.stopListening();
   pinMode(front_TrgPin, OUTPUT);
   pinMode(front_EcoPin, INPUT);
   pinMode(left_TrgPin, OUTPUT);
@@ -67,18 +56,18 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
+  Wire.beginTransmission(44);
   //判断小车前方有车或障碍物
   if(front_UlDisMea() <= 25){
     info[0] = 0;
     info[1] = front_UlDisMea();
-    radio.write(&info, sizeof(info));
+    Wire.write();
   }
   else{
     info[0] = 1;
     info[1] = right_UlDisMea();
-    radio.write(&info, sizeof(info));
   }
   //后续可以考虑利用左超声做第三个模式，作用同第二个模式
+  Wire.endTransmission();
   delay(2);
 }

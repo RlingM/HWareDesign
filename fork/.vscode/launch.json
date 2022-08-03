@@ -5,13 +5,38 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Attach",
-            "port": 9229,
-            "request": "attach",
-            "skipFiles": [
-                "<node_internals>/**"
+            "name": "Arduino",
+            "type": "arduino",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "targetArchitecture": "arm",
+            "miDebuggerPath": "",
+            "debugServerPath": "",
+            "debugServerArgs": "",
+            "customLaunchSetupCommands": [
+                {
+                    "text": "target remote localhost:3333"
+                },
+                {
+                    "text": "file \"${file}\""
+                },
+                {
+                    "text": "load"
+                },
+                {
+                    "text": "monitor reset halt"
+                },
+                {
+                    "text": "monitor reset init"
+                }
             ],
-            "type": "node"
+            "stopAtEntry": true,
+            "serverStarted": "Info\\ :\\ [\\w\\d\\.]*:\\ hardware",
+            "launchCompleteCommand": "exec-continue",
+            "filterStderr": true,
+            "args": []
         }
     ]
 }
