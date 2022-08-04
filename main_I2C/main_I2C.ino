@@ -61,11 +61,12 @@ void loop() {
   if(front_UlDisMea() <= 25){
     info[0] = 0;
     info[1] = front_UlDisMea();
-    Wire.write();
+    Wire.write(info, sizeof(info));
   }
   else{
     info[0] = 1;
     info[1] = right_UlDisMea();
+    Wire.write(info, sizeof(info));
   }
   //后续可以考虑利用左超声做第三个模式，作用同第二个模式
   Wire.endTransmission();

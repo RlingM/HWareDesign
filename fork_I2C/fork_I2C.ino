@@ -85,7 +85,7 @@ void Deceleration(){
       right_goal -= 20;
       delay(500);
     }
-    radio.read(&x, sizeof(x));
+    Wire.read(&x, sizeof(x));
     Serial.println(x[1]);
   }while((x[1] <= 25) && ((int)x[0] == 0));
 }
@@ -127,7 +127,7 @@ void right_ISR(){
 //外部中断
 void Isr(){
   float tempX[3];
-  radio.read(&tempX, sizeof(tempX));
+  Wire.read(&tempX, sizeof(tempX));
   float temp = Control(tempX[1]);
   left_goal += temp / 2;
   right_goal -= temp / 2;
@@ -403,7 +403,7 @@ void setup(){
 void loop() {
   // put your main code here, to run repeatedly:
   if(Wire.available()){
-    Wire.read(order, sizeof(order));
+    Wire.read(&order, sizeof(order));
     motorChange(order);
   }
   /*while(Serial.available() > 0){

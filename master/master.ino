@@ -13,7 +13,7 @@ const int right_TrgPin = 5;
 const int right_EcoPin = 3;
 
 RF24 radio(7, 8);
-const byte address[6] = "10011";
+const byte address[6] = "00001";
 float info[3];
 
 //前超声测距
@@ -50,12 +50,10 @@ void setup() {
   // put your setup code here, to run once:
   info[2] = '\0';
   SPI.begin();
-  Serial.begin(115200);
+  Serial.begin(9600);
   radio.begin();
-  radio.setChannel(90);
   radio.openWritingPipe(address);
-  radio.setDataRate(RF24_2MBPS);
-  radio.setPALevel(RF24_PA_MAX);
+  radio.setPALevel(RF24_PA_MIN);
   radio.stopListening();
   pinMode(front_TrgPin, OUTPUT);
   pinMode(front_EcoPin, INPUT);
@@ -80,5 +78,5 @@ void loop() {
     radio.write(&info, sizeof(info));
   }
   //后续可以考虑利用左超声做第三个模式，作用同第二个模式
-  delay(2);
+  delay(3);
 }

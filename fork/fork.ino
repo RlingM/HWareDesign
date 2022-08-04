@@ -15,7 +15,6 @@ const char Turn_right = 'r' ;
 const char Stop = 's';
 const char Start = 'k';
 #define SPEED_LEVEL_MAX 200  //遥控模式下电机最大速度，待改！！！
-//#define SPEED_LEVEL_MIN 100   //遥控模式下电机最小速度，待改！！！
 
 //电机接口定义
 const int left_ENAandB = 6;
@@ -31,7 +30,7 @@ const int right_ENC_A = 3;
 
 //通信
 RF24 radio(7,8);
-const byte address[6] = "10011";
+const byte address[6] = "00001";
 float order[3];
 
 //PID
@@ -47,6 +46,10 @@ float left_rpm;
 float right_rpm;
 
 const float iniSpeed = 80;
+const float RMaxSpeed = 200;
+const float LMaxSpeed = 200;
+const float ReRMaxSpeed = -200;
+const float ReLMaxSpeed = -200;
 float left_goal = iniSpeed;
 float right_goal = iniSpeed;
 
@@ -136,12 +139,29 @@ void right_ISR(){
 void Isr(){
   float tempX[3];
   radio.read(&tempX, sizeof(tempX));
-  float temp = Control(tempX[1]);
-  left_goal += temp / 2;
-  right_goal -= temp / 2;
+  
+  if(tempX[0] == 1){
+    float temp = Control(tempX[1]);
+    left_goal += temp / 2;
+    right_goal -= temp / 2;
+    
+    if(left_goal > 200){
+      left_goal = LMaxSpeed;
+    }
+    if(right_goal > 200){
+      right_goal = RMaxSpeed;
+    }
+    if(left_goal < -200){
+      left_goal = ReLMaxSpeed;
+    }
+    if(right_goal < -200){
+      right_goal = ReRMaxSpeed;
+    }
+  }
+  
   left_ISR();
   right_ISR();
-  Serial.print("LeftGoal:");
+  /*Serial.print("LeftGoal:");
   Serial.print(left_goal);
   Serial.print(",");
   Serial.print("RightGoal:");
@@ -151,7 +171,7 @@ void Isr(){
   Serial.print(left_rpm);
   Serial.print(",");
   Serial.print("RightRpm:");
-  Serial.println(right_rpm);
+  Serial.println(right_rpm);*/
 }
 
 //恢复前行
@@ -404,12 +424,10 @@ void setup(){
   //Serial.println("Please choose mode.");
   //Serial.println("The default mode is Remote Control mode.");
   SPI.begin();
-  Serial.begin(115200);
+  Serial.begin(9600);
   radio.begin();
-  radio.setChannel(90);
-  radio.setDataRate(RF24_2MBPS);
   radio.openReadingPipe(0, address);
-  radio.setPALevel(RF24_PA_MAX); 
+  radio.setPALevel(RF24_PA_MIN); 
   radio.startListening();
 }
 
@@ -417,6 +435,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   if(radio.available()){
     radio.read(&order, sizeof(order));
+    Serial.println(order[1]);
     motorChange(order);
   }
   /*while(Serial.available() > 0){
