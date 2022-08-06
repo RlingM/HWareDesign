@@ -5,16 +5,17 @@
 #include <SPI.h>
 
 #include <TimerOne.h>
-#include "HardwareSerial.h"
 
 //遥控
-const char Forward = 'f';
-const char Backward = 'b';
-const char Turn_left = 'l' ;
-const char Turn_right = 'r' ;
-const char Stop = 's';
-const char Start = 'k';
-#define SPEED_LEVEL_MAX 200  //遥控模式下电机最大速度，待改！！！
+const char Forward = 'F';
+const char Backward = 'B';
+const char TurnlLft = 'L' ;
+const char TurnRight = 'R' ;
+const char Stop = 'S';
+const char Start = 'G';
+const char ModeChange = 'C';
+const char SpeedUp = 'U';
+const char SpeedDown = 'D';
 
 //电机接口定义
 const int left_ENAandB = 6;
@@ -23,7 +24,7 @@ const int right_ENAandB = 5;
 const int left_IN1_3 = 9;
 const int left_IN2_4 = 4;
 const int right_IN1_3 = 10;
-const int right_IN2_4 = A0;
+const int right_IN2_4 = 14;
 
 const int left_ENC_A = 2;
 const int right_ENC_A = 3;
@@ -31,7 +32,8 @@ const int right_ENC_A = 3;
 //通信
 RF24 radio(7,8);
 const byte address[6] = "00001";
-float order[3];
+float orderForF[3];
+float orderForR[3];
 
 //PID
 int left_count = 0;
@@ -45,21 +47,19 @@ int right_Pwm;
 float left_rpm;
 float right_rpm;
 
-const float iniSpeed = 80;
-const float RMaxSpeed = 200;
-const float LMaxSpeed = 200;
-const float ReRMaxSpeed = -200;
-const float ReLMaxSpeed = -200;
+const float iniSpeed = 40;
+const float MaxSpeed = 80;
 float left_goal = iniSpeed;
 float right_goal = iniSpeed;
 
-//模式选择 'm = 1',遥控模式  'm = 0',自动模式
-bool mode = 0;
+//模式选择，mode = true为遥控，mode = false为自动
+char Cmd;
+bool mode = true;
 
 //Control
-float CA = -4.8 * pow(10, -4);
-float Ca = -4.9 * pow(10, -5);
-float Cb = CA * Ca * Ca / 4;
+float CA = -4.8 * pow(10, -3);
+float Ca = -833.3;
+float Cb = CA * Ca * Ca / 4.0;
 float deltaV;
 float pre_dist;
 //---------------------------------------------------------
@@ -96,15 +96,16 @@ void Deceleration(){
       right_goal -= 20;
       delay(500);
     }
-    radio.read(&x, sizeof(x));
-    Serial.println(x[1]);
-  }while((x[1] <= 25) && ((int)x[0] == 0));
+    do{
+      radio.read(&x, sizeof(x));
+    }while((int)x[0] != 0);
+  }while(x[1] <= 40);
 }
 
 //直线控制
 float Control(float deltaDist){
-  Cb = CA * Ca * Ca / 4;
-  deltaV = Ca * (deltaDist - pre_dist) / 5 + Cb * (deltaDist - 15) / 100;
+  Cb = CA * Ca * Ca / 4.0;
+  deltaV = Ca * (deltaDist - pre_dist) * 2 / 25.0 + Cb * (deltaDist - 15) / 100.0;
   pre_dist = deltaDist;
   return deltaV;
 }
@@ -121,7 +122,7 @@ void CodeR(){
 
 //左侧轮中断更新速度
 void left_ISR(){
-  left_rpm = left_count * 15.0 / 13.0;
+  left_rpm = left_count * 60.0 / 13.0;
   left_count = 0;
   left_Pwm = left_PID(left_goal, left_rpm);
   analogWrite(left_ENAandB, left_Pwm);
@@ -129,7 +130,7 @@ void left_ISR(){
 
 //右侧轮中断更新速度
 void right_ISR(){
-  right_rpm = right_count * 15.0 / 13.0;
+  right_rpm = right_count * 60.0 / 13.0;
   right_count = 0;
   right_Pwm = right_PID(right_goal, right_rpm);
   analogWrite(right_ENAandB, right_Pwm);
@@ -138,30 +139,38 @@ void right_ISR(){
 //外部中断
 void Isr(){
   float tempX[3];
-  radio.read(&tempX, sizeof(tempX));
+  do{
+    radio.read(&tempX, sizeof(tempX));
+  }while((int)tempX[0] != 0);
   
-  if(tempX[0] == 1){
-    float temp = Control(tempX[1]);
-    left_goal += temp / 2;
-    right_goal -= temp / 2;
-    
-    if(left_goal > 200){
-      left_goal = LMaxSpeed;
-    }
-    if(right_goal > 200){
-      right_goal = RMaxSpeed;
-    }
-    if(left_goal < -200){
-      left_goal = ReLMaxSpeed;
-    }
-    if(right_goal < -200){
-      right_goal = ReRMaxSpeed;
-    }
+  float temp = Control(tempX[1]);
+  left_goal -= temp / 2;
+  right_goal += temp / 2;
+  
+  if(left_goal > MaxSpeed){
+    left_goal = MaxSpeed;
+    digitalWrite(left_IN1_3, HIGH);
+    digitalWrite(left_IN2_4, LOW);
+  }
+  if(right_goal > MaxSpeed){
+    right_goal = MaxSpeed;
+    digitalWrite(right_IN1_3, HIGH);
+    digitalWrite(right_IN2_4, LOW);
+  }
+  if(left_goal < -MaxSpeed){
+    digitalWrite(left_IN1_3, LOW);
+    digitalWrite(left_IN2_4, HIGH);
+    left_goal = MaxSpeed;
+  }
+  if(right_goal < -MaxSpeed){
+    digitalWrite(right_IN1_3, LOW);
+    digitalWrite(right_IN2_4, HIGH);
+    right_goal = MaxSpeed;
   }
   
   left_ISR();
   right_ISR();
-  /*Serial.print("LeftGoal:");
+  Serial.print("LeftGoal:");
   Serial.print(left_goal);
   Serial.print(",");
   Serial.print("RightGoal:");
@@ -171,164 +180,131 @@ void Isr(){
   Serial.print(left_rpm);
   Serial.print(",");
   Serial.print("RightRpm:");
-  Serial.println(right_rpm);*/
+  Serial.println(right_rpm);
 }
 
 //恢复前行
 void Proceed(){
+  left_goal = iniSpeed;
+  right_goal = iniSpeed;
   digitalWrite(left_IN1_3, HIGH);
   digitalWrite(left_IN2_4, LOW);
-  left_Pwm = -left_Pwm;
   digitalWrite(right_IN1_3, HIGH);
   digitalWrite(right_IN2_4, LOW);
-  right_Pwm = -right_Pwm;
 }
 
-void motorChange(float x[])
-{
-  switch((int)x[0]){
-    case 0:
-    //首先尝试原地左转一点能否继续前进，即绕过去
-      right_goal = -right_goal;
-      digitalWrite(right_IN1_3, LOW);
-      digitalWrite(right_IN2_4, HIGH);
-      right_Pwm = -right_Pwm;
-      delay(2000);
+//后退
+void Back(){
+  left_goal = iniSpeed;
+  right_goal = iniSpeed;
+  digitalWrite(left_IN1_3, LOW);
+  digitalWrite(left_IN2_4, HIGH);
+  digitalWrite(right_IN1_3, LOW);
+  digitalWrite(right_IN2_4, HIGH);
+}
 
-      //2秒尝试失败后，开始减速
-      right_goal = -right_goal;
-      digitalWrite(right_IN1_3, HIGH);
-      digitalWrite(right_IN2_4, LOW);
-      right_Pwm = -right_Pwm;
-      Deceleration();
+//处理前方道路情况
+void SolutionF(float x){
+  //首先尝试原地左转一点能否继续前进，即绕过去
+  digitalWrite(left_IN1_3, LOW);
+  digitalWrite(left_IN2_4, HIGH);
+  delay(1500);
+  
+  float temp[3];
+  radio.read(&temp, sizeof(temp));
+  while(temp[0] != 0){
+    radio.read(&temp, sizeof(temp));
+  }
+  
+  //2秒尝试失败后，开始减速
+  if(temp[1] < 40){
+    digitalWrite(left_IN1_3, HIGH);
+    digitalWrite(left_IN2_4, LOW);
+    Deceleration();
 
-      //减速成功后，恢复原速
-      left_goal = iniSpeed;
-      right_goal = iniSpeed;
-      break;
-
-    default:
-      break;
+    //减速成功后，恢复原速
+    left_goal = iniSpeed;
+    right_goal = iniSpeed;
   }
 }
 
-void RemoteControlMode(char Cmd)//遥控模式
-{
-    if(Cmd =='f' || Cmd == 'b' || Cmd == 'l' || Cmd == 'r')
-    {
-      motorRun(Cmd, left_goal, right_goal);
-    }
-    else{
-      switch(Cmd)
+//遥控模式
+void RemoteControlMode(char cmd){
+  switch(cmd){
+    //恢复前进
+    case 'F':
+      Proceed();
+      break;
+      
+    //后退
+    case 'B':
+      Back();
+      break;
+      
+    //左转
+    case 'L':
+      digitalWrite(left_IN1_3, LOW);
+      digitalWrite(left_IN2_4, HIGH);
+      left_goal = 30;
+      right_goal = 30;
+      break;
+
+    //右转
+    case 'R':
+      digitalWrite(right_IN1_3, LOW);
+      digitalWrite(right_IN2_4, HIGH);
+      left_goal = 30;
+      right_goal = 30;
+      break;
+      
+    //停车
+    case 'S':
+      motorStop();
+      break;
+
+    //切换到自动模式 
+    case 'C':
+      //Serial.println("NOW, change to the Autonomic mode.");
+      mode = false;
+      break;
+      
+    //逐步加速
+    case 'U':
+      if((left_goal < MaxSpeed) && (right_goal < MaxSpeed))
       {
-        case 'm':   //输入'm'切换模式
-        //Serial.println("NOW, change to the Autonomic mode.");
-        mode = 0;
-        break;
-
-        case 'a':    //输入'a'增加速度
-        if((left_goal < SPEED_LEVEL_MAX) && (right_goal < SPEED_LEVEL_MAX))
-        {
-          right_goal += 20;
-          left_goal += 20;//增幅待改！！！
-          //Serial.print("The current speed: ");
-        }
-        else if((left_goal == SPEED_LEVEL_MAX) && (left_goal == SPEED_LEVEL_MAX))
-        {
-          //Serial.print("Already the maximum speed! ");
-          //Serial.print("The current speed: ");
-        }
-        else
-        {
-          //Serial.println("Something wrong(From the speed.)");
-        }
-        break;
-        
-        case 'j':
-        if(abs(right_goal) > 0 && abs(left_goal) > 0)
-        {
-          left_goal -= 20;//增幅待改！！！
-          right_goal -= 20;
-          //Serial.print("The current speed: ");
-        }
-        else if(right_goal == 0 && left_goal == 0/*SPEED_LEVEL == SPEED_LEVEL_MIN*/)
-        {
-          //Serial.println("Already the minimum speed! ");
-          //Serial.print("The current speed: ");
-        }
-        else
-        {
-          //Serial.println("Something wrong(From the speed).");
-        }
-        break;
-
-        case 's':
-        motorRun(Cmd, left_goal, right_goal);
-        //Serial.println("Stop run.");
-        break;
-
-        case 'k':
-        if(left_goal == 0 && right_goal == 0)
-        {
-          //Serial.println("Start run.");
-          mode = 0;
-          break;
-        }
-        //else Serial.println("Already start!");
-
-        default:
-          //Serial.println("Not the right command!");
-          ;
+        right_goal += 10;
+        left_goal += 10;//增幅待改！！！
+        //Serial.println("The current speed: ");
       }
-    }
-}
-
-void AutoMode(char Cmd){
-  right_goal = 80;
-  left_goal = 80;
-  switch(Cmd)
-  {
-    case 'm':
-      mode = 1;
-      //Serial.println("Now, change to the Remote Control mode.");
-      break;
-    
-    case 's':
-      motorRun(Cmd, left_goal, right_goal);
-      //Serial.println("Stop run.");
-      break;
-
-    case 'k':
-      if(left_Pwm == 0 && right_Pwm == 0)
+      else if((left_goal >= MaxSpeed) && (left_goal >= MaxSpeed))
       {
-        //Serial.println("Start run.");
-        mode = 0;
-        break;
+        left_goal = MaxSpeed;
+        right_goal = MaxSpeed;
+        //Serial.println("Already the maximum speed! ");
       }
-      //else Serial.println("Already start!");
-
-    case 'f':
-      mode = 1;
-      //Serial.println("Now, change to the Remote Control mode.");
-      motorRun('f', left_goal, right_goal);
+      else if((left_goal > MaxSpeed - 10) && (right_goal > MaxSpeed - 10))
+      {
+        left_goal = MaxSpeed;
+        right_goal = MaxSpeed;
+      }
       break;
 
-    case 'b':
-      mode = 1;
-      //Serial.println("Now, change to the Remote Control mode.");
-      motorRun('b', left_goal, right_goal);
-      break;
-
-    case 'l':
-      mode = 1;
-      //Serial.println("Now, change to the Remote Control mode.");
-      motorRun('l', left_goal, right_goal);
-      break;
-
-    case 'r':
-      mode = 1;
-      //Serial.println("Now, change to the Remote Control mode.");
-      motorRun('r', left_goal, right_goal);
+    //逐步减速
+    case 'D':
+      if((right_goal > 0) && (left_goal > 0))
+      {
+        left_goal -= 10;//增幅待改！！！
+        right_goal -= 10;
+        //Serial.print("The current speed: ");
+      }
+      else if((right_goal < 10) && (left_goal < 10)){
+        right_goal = 0;
+        left_goal = 0;
+      }
+      else if((right_goal == 0) && (left_goal == 0))
+      {
+        //Serial.println("Already the minimum speed! ");
+      }
       break;
 
     default:
@@ -337,69 +313,56 @@ void AutoMode(char Cmd){
   }
 }
 
-void motorRun(char Cmd, uint8_t left_goal, uint8_t right_goal){
-  switch(Cmd){
-    case Forward:
-      left_goal = left_goal;
-      right_goal = right_goal;
-      Proceed();
-      break;
-    
-    case Backward:
-      left_goal = left_goal;
-      right_goal = right_goal;
-      //Back();
+void AutoMode(char cmd){
+  switch(cmd){
+    //切换到遥控
+    case 'C':
+      mode = true;
+      //Serial.println("Now, change to the Remote Control mode.");
       break;
 
-    case Turn_left:
-      left_goal = -60;
-      right_goal = 60;
-      Proceed();
-      delay(100);//待调
+    //停车
+    case 'S':
       motorStop();
-      break;
-    
-    
-    case Turn_right:
-      left_goal = 60;
-      right_goal = -60;//待调
-      Proceed();
-      delay(100);//待调
-      motorStop();
+      //Serial.println("Stop run.");
       break;
 
-    case Stop:
-      motorStop();
+    //恢复前进
+    case 'F':
+      Proceed();
       break;
 
+    case 'B':
+      Back();
+      break;
+
+    //左转
+    case 'L':
+      digitalWrite(left_IN1_3, LOW);
+      digitalWrite(left_IN2_4, HIGH);
+      left_goal = 30;
+      right_goal = 30;
+      break;
+
+    //右转
+    case 'R':
+      digitalWrite(right_IN1_3, LOW);
+      digitalWrite(right_IN2_4, HIGH);
+      left_goal = 30;
+      right_goal = 30;
+      break;
+      
     default:
-      //Serial.print("Wrong command!");
-      //Serial.println("Please input true command again.");
+      //Serial.println("Not the right command!");
       ;
   }
 }
 
-void motorStop()
-{
+void motorStop(){
   digitalWrite(left_IN1_3, LOW);
   digitalWrite(left_IN2_4, LOW);
   digitalWrite(right_IN1_3, LOW);
   digitalWrite(right_IN2_4, LOW);
-}
-
-//判断是否同速
-bool TheSameSpeed(){
-  return (abs(left_rpm) < abs(right_rpm) + 5.0);
-}
-
-//判断是否右侧轮转速更高
-bool RHigher(){
-  return (abs(right_rpm) - abs(left_rpm) > 20.0);
-}
-
-//判断是否左侧轮转速更高
-bool LHigher(){
-  return (abs(left_rpm) - abs(right_rpm) > 20.0);
 }
 
 void setup(){
@@ -411,6 +374,9 @@ void setup(){
   pinMode(left_ENC_A, INPUT);
   pinMode(right_ENC_A, INPUT);
 
+  pinMode(left_ENAandB, OUTPUT);
+  pinMode(right_ENAandB, OUTPUT);
+  
   digitalWrite(left_IN1_3, HIGH);
   digitalWrite(left_IN2_4, LOW);
   digitalWrite(right_IN1_3, HIGH);
@@ -434,21 +400,30 @@ void setup(){
 void loop() {
   // put your main code here, to run repeatedly:
   if(radio.available()){
-    radio.read(&order, sizeof(order));
-    Serial.println(order[1]);
-    motorChange(order);
+    float temp[3];
+    radio.read(&temp, sizeof(temp));
+    if(temp[0] == 0){
+      orderForF[0] = temp[0];
+      orderForF[1] = temp[1];
+      orderForF[2] = temp[2];
+      if(orderForF[1] < 40){
+        SolutionF(orderForF[1]);
+      }
+    }
+    if(temp[0] == 1){
+      orderForR[0] = temp[0];
+      orderForR[1] = temp[1];
+      orderForR[2] = temp[2];
+    }
   }
-  /*while(Serial.available() > 0){
-    char Cmd = Serial.read();
-    delay(1);
-    if(mode == 1)
-    {
+  /*if(Serial.available()){
+    Cmd = Serial.read();
+    if(mode){
       //Serial.print("The Remote Control mode: ");
       //Serial.println(Cmd);
       RemoteControlMode(Cmd);//遥控模式
     }
-    else
-    {
+    else{
       //Serial.print("The Auto mode: ");
       //Serial.println(Cmd);
       AutoMode(Cmd);//自动模式

@@ -8,9 +8,9 @@
 const int front_TrgPin = 10;
 const int front_EcoPin = 4;
 const int left_TrgPin = 6;
-const int left_EcoPin = 2;
+const int left_EcoPin = 18;
 const int right_TrgPin = 5;
-const int right_EcoPin = 3;
+const int right_EcoPin = 19;
 
 RF24 radio(7, 8);
 const byte address[6] = "00001";
@@ -65,18 +65,14 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
-  //判断小车前方有车或障碍物
-  if(front_UlDisMea() <= 25){
-    info[0] = 0;
-    info[1] = front_UlDisMea();
-    radio.write(&info, sizeof(info));
-  }
-  else{
-    info[0] = 1;
-    info[1] = right_UlDisMea();
-    radio.write(&info, sizeof(info));
-  }
+
+  info[0] = 0;
+  info[1] = front_UlDisMea();
+  radio.write(&info, sizeof(info));
+  info[0] = 1;
+  info[1] = right_UlDisMea();
+  radio.write(&info, sizeof(info));
+    
   //后续可以考虑利用左超声做第三个模式，作用同第二个模式
-  delay(3);
+  delay(4);
 }
