@@ -35,6 +35,12 @@ const byte address[6] = "00001";
 float orderForF[3];
 float orderForR[3];
 bool NeedControl = true;
+bool notStop = true;
+
+//直线控制
+float err = 0, derr = 0, dderr = 0;
+float Skp = 1.0, Ski = 0, Skd = 0;
+float goal_dist = 15;
 
 //PID
 int left_count = 0;
@@ -48,8 +54,8 @@ int right_Pwm;
 float left_rpm;
 float right_rpm;
 
-const float iniSpeed = 60;
-const float MaxSpeed = 100;
+const float iniSpeed = 150;
+const float MaxSpeed = 200;
 float left_goal = iniSpeed;
 float right_goal = iniSpeed;
 
@@ -60,12 +66,12 @@ bool mode = true;
 //读取1/3引脚的电平，高则返回1，低则返回0
 int staFor1_3;
 
-//Control
-float CA = -4.8 * pow(10, -3);
-float Ca = -416.0;
-float Cb = CA * Ca * Ca / 4.0;
+/*//Control
+float CA = -0.048;
+float Ca = -41.7;
+float Cb = CA * Ca * Ca / 4.0;   //Cb = -20.9
 float deltaV;
-float pre_dist;
+float pre_dist;*/
 //---------------------------------------------------------
 
 //互换左侧电机高低电平
@@ -94,6 +100,15 @@ void RchangeStatus(){
     digitalWrite(right_IN1_3, HIGH);
     digitalWrite(right_IN2_4, LOW);
   }
+}
+
+//直线控制
+float Straight(float goalDist, float nowDist){
+  dderr = goalDist - nowDist - err - derr;
+  derr = goalDist - nowDist - err;
+  err = goalDist - nowDist;
+  float dere = Ski * err + Skp * derr + Skd * dderr;
+  return dere;
 }
 
 //PID算法--左
@@ -130,6 +145,7 @@ void Deceleration(){
     
     if(left_goal < 0){
       left_goal = 0;
+    }
     if(right_goal < 0){
       right_goal = 0;
     }
@@ -140,13 +156,13 @@ void Deceleration(){
   }while(x[1] <= 30);
 }
 
-//直线控制
+/*//直线控制
 float Control(float deltaDist){
   Cb = CA * Ca * Ca / 4.0;
-  deltaV = Ca * (deltaDist - pre_dist) * 2 / 25.0 + Cb * (deltaDist - 15) / 100.0;
+  deltaV = Ca * (deltaDist - pre_dist) * 3 / 50 + Cb * (deltaDist - 15) * 3 / 5.0;
   pre_dist = deltaDist;
   return deltaV;
-}
+}*/
 
 //左侧轮中断计数
 void CodeL(){
@@ -183,7 +199,8 @@ void right_ISR(){
 //外部中断
 void Isr(){
   if(NeedControl){    
-    float temp = Control(orderForR[1]);
+    //float temp = Control(orderForR[1]);
+    float temp = Straight(goal_dist, orderForR[1]);
     left_goal -= temp / 2;
     right_goal += temp / 2;
     
@@ -198,13 +215,13 @@ void Isr(){
       digitalWrite(right_IN2_4, LOW);
     }
     if(left_goal < 0){
-      LchangeStatus()
+      LchangeStatus();
       if(left_goal > MaxSpeed){
         left_goal = MaxSpeed;
       }
     }
     if(right_goal < 0){
-      RchangeStatus()
+      RchangeStatus();
       if(right_goal > MaxSpeed){
         right_goal = MaxSpeed;
       }
@@ -247,11 +264,12 @@ void SolutionF(float x){
   while(temp[0] != 0){
     radio.read(&temp, sizeof(temp));
   }
+
+  digitalWrite(left_IN1_3, HIGH);
+  digitalWrite(left_IN2_4, LOW);
   
-  //2秒尝试失败后，开始减速
+  //2秒尝试失败后，开始减速，尝试成功，则直接结束
   if(temp[1] < 30){
-    digitalWrite(left_IN1_3, HIGH);
-    digitalWrite(left_IN2_4, LOW);
     Deceleration();
 
     //减速成功后，恢复原速
@@ -349,14 +367,17 @@ void RemoteControlMode(char cmd){
 
     default:
       //Serial.print("Wrong");
+      ;
   }
 }
 
+//自动模式
 void AutoMode(char cmd){
   switch(cmd){
     //电机启动
     case 'I':
       Begin();
+      notStop = true;
       break;
 
     //切换到遥控  
@@ -368,6 +389,7 @@ void AutoMode(char cmd){
     //停车
     case 'S':
       motorStop();
+      notStop = false;
       //Serial.print("Stop");
       break;
 
@@ -386,8 +408,8 @@ void AutoMode(char cmd){
       digitalWrite(right_IN2_4, LOW);
       digitalWrite(left_IN1_3, LOW);
       digitalWrite(left_IN2_4, HIGH);
-      left_goal = 60;
-      right_goal = 60;
+      left_goal = 80;
+      right_goal = 80;
       break;
 
     //右转
@@ -396,8 +418,8 @@ void AutoMode(char cmd){
       digitalWrite(right_IN2_4, HIGH);
       digitalWrite(left_IN1_3, HIGH);
       digitalWrite(left_IN2_4, LOW);
-      left_goal = 60;
-      right_goal = 60;
+      left_goal = 80;
+      right_goal = 80;
       
     default:
       //Serial.print("Wrong");
@@ -405,6 +427,7 @@ void AutoMode(char cmd){
   }
 }
 
+//电机开始转动
 void Begin(){
   digitalWrite(left_IN1_3, HIGH);
   digitalWrite(left_IN2_4, LOW);
@@ -412,6 +435,7 @@ void Begin(){
   digitalWrite(right_IN2_4, LOW);
 }
 
+//电机停止转动
 void motorStop(){
   digitalWrite(left_IN1_3, LOW);
   digitalWrite(left_IN2_4, LOW);
@@ -450,8 +474,7 @@ void setup(){
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  if(millis() % 5000 == 0){
+  if(millis() % 100 == 0){
     Serial.print("LeftGoal:");
     Serial.print(left_goal);
     Serial.print(",");
@@ -466,29 +489,37 @@ void loop() {
   }
   
   if(NeedControl){
-    if(radio.available()){
-      delay(10);
-      float temp[3];
-      radio.read(&temp, sizeof(temp));
-      if(temp[0] == 0){
-        orderForF[0] = temp[0];
-        orderForF[1] = temp[1];
-        orderForF[2] = temp[2];
-        if(orderForF[1] < 40){
-          SolutionF(orderForF[1]);
+    if(notStop){
+      if(radio.available()){
+        delay(10);
+        float temp[3];
+        radio.read(&temp, sizeof(temp));
+        if(temp[0] == 0){
+          orderForF[0] = temp[0];
+          orderForF[1] = temp[1];
+          orderForF[2] = temp[2];
+          if(orderForF[1] < 30){
+            SolutionF(orderForF[1]);
+          }
+        }
+        if(temp[0] == 1){
+          orderForR[0] = temp[0];
+          orderForR[1] = temp[1];
+          orderForR[2] = temp[2];
         }
       }
-      if(temp[0] == 1){
-        orderForR[0] = temp[0];
-        orderForR[1] = temp[1];
-        orderForR[2] = temp[2];
-      }
+    }
+    else{
+      radio.flush_tx();
+      radio.flush_rx();
     }
   }
   
   if(Serial.available()){
     delay(10);
     Cmd = Serial.read();
+    radio.flush_tx();
+    radio.flush_rx();
     //遥控模式
     if(mode){
       //Serial.print("Remote mode");
